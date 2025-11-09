@@ -1,4 +1,6 @@
-# سركببير - Sirkbbir
+# سرك ببير - Sirkbbir
+
+**[Read in Arabic (اقرأ بالعربية)](README.ar.md)**
 
 # Sirkbbir - Share Secrets Securely
 
