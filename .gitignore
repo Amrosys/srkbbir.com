@@ -27,3 +27,5 @@ website/cypress/videos
 website/cypress/screenshots
 
 .idea
+sirkbbir-frontend.zip
+website/dist/
