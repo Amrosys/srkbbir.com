@@ -1,0 +1,92 @@
+name: Test
+# yamllint disable-line rule:truthy
+on: [pull_request]
+jobs:
+  go:
+    name: Go Test
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+      memcached:
+        image: memcached
+        ports:
+          - 11211:11211
+    env:
+      MEMCACHED: localhost:11211
+      REDIS_URL: "redis://localhost:6379/0"
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        id: go
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v3
+
+      - name: Go Test
+        run: |
+          for i in {1..5}; do if ! echo stats | nc -w 1 localhost 11211 >/dev/null; then echo 'Waiting for memcached' && sleep 1; fi; done
+          go test ./... -race -coverprofile=coverage.txt -covermode=atomic -v
+
+      - name: codecov upload
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+  node:
+    name: Website Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "yarn"
+          cache-dependency-path: website/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Lint
+        run: yarn tsc && yarn run lint
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: yarn test
+        env:
+          CI: true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: website/playwright-report/
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results
+          path: website/test-results/
+          retention-days: 30
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  dependabot-merge:
+    name: "Dependabot automerge"
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+    needs: ["node", "go"]
+    if: github.actor == 'dependabot[bot]' && github.event_name == 'pull_request'
+    steps:
+      - uses: fastify/github-action-merge-dependabot@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          target: "minor"
